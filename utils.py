@@ -1,5 +1,11 @@
 import numpy as np
+
 from numba import njit
+from numba import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+import warnings
+warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
+warnings.simplefilter('ignore', category=NumbaPendingDeprecationWarning)
+
 from tqdm import tqdm
 
 
@@ -31,6 +37,62 @@ def get_maxd(set):
 
 
 # Main funcs
+@njit
+def predict(validation_set, q, g, final):
+
+    #print(len(validation_set))
+
+    left  = validation_set[0]
+    right = validation_set[1]
+    disp  = validation_set[2]
+
+    #print(final," | disp shape: ",disp.shape)
+
+    n = g.size
+    h, w = disp.shape
+
+    prediction = np.zeros((h, w), dtype=np.int64)
+
+    for i in range(h):
+        F = np.zeros((w, n))
+        R = np.zeros((w, n))
+
+        for j in range(1, w):
+            penalty = np.ones(n)*np.inf
+
+            for s in range(n):
+                for t in range(n):
+
+                    if 0 <= j-1 - t < w:
+                        if not final:
+                            penalty[t] = F[j-1,t] + q[abs(left[i,j-1] - right[i,j-1-t])] + g[abs(t-s)]
+                        if final:
+                            penalty[t] = F[j-1,t] + q[abs(left[i,j-1] - right[i,j-1-t])] + g[abs(t-s)] - np.abs(disp[i,j-1-s] - s)
+                
+                F[j, s] = np.min(penalty)
+                R[j, s] = np.argmin(penalty)
+
+                
+        last_best = np.zeros((w), dtype=np.int64)
+        last = np.ones(n)*np.inf
+
+        # F
+        for k in range(n):
+            last[k] = F[-1,k] + q[abs(left[i, w-1] - right[i, w-1-t])]
+            #print(f">>>Debug {k} | last: {last[k] }")
+        last_best[-1] = np.argmin(last) 
+
+        # R
+        for j in range(w-1, 0, -1):
+            #print(f">>>Debug {j} | last_best: {R[j, last_best[j]]}")
+            last_best[j-1] = R[j, last_best[j]]
+
+        # Res
+        for k in range(w):
+            prediction[i, k] = last_best[k]
+
+    return prediction
+
 
 def svm(n_iter, dataset, maxd, alpha=-2):
     # cumulatives
@@ -46,7 +108,7 @@ def svm(n_iter, dataset, maxd, alpha=-2):
             left  = case[0]
             right = case[1]
             gr_tr = case[2]  # ground truth
-            guess = predict(left, right, gr_tr, q_cum, g_cum)
+            guess = predict(case, q_cum, g_cum, True)
             #print(f">>>Debug | case len: {len(case)} | gr_tr: {gr_tr}")
 
             score_grtr  = score(left, right, gr_tr, q_cum, g_cum)
@@ -84,9 +146,12 @@ def score(left, right, disp, q, g):
 
 @njit
 def sgrad(left, right, disp, maxd):
-    q_ = np.zeros(256)
-    g_ = np.zeros(maxd+1)
     height, width = disp.shape[:2]
+
+    # max colr diff
+    q_ = np.zeros(256)
+    # max disp diff
+    g_ = np.zeros(maxd+1)   
 
     for i in range(height):
         for j in range(width):
