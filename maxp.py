@@ -29,25 +29,32 @@ img_set_barn = {
     "im_d" : np.array( imread("imgs/barn_disp2.pgm") )
 }
 
+img_set_poster = {
+    "im_l" : np.array( imread("imgs/poster_im2.ppm") ),
+    "im_r" : np.array( imread("imgs/poster_im6.ppm") ),
+    "im_d" : np.array( imread("imgs/poster_disp2.pgm") )
+}
+
 
 
 def main(scale, n_iter):
 
     # Composing dataset
-    training_set   = compose_set([ img_set_barn, img_set_venus, img_set_bull ], scale)
-    validation_set = compose_set([ img_set_sawtooth ], scale)
+    training_set   = compose_set([ img_set_sawtooth, img_set_venus, img_set_bull, img_set_poster ], scale)
+    validation_set = compose_set([ img_set_barn ], scale)
     
     # Max disparity
     maxd = get_maxd(training_set)
     print(f"Dataset is composed.")
     print(f"Info | size: {len(training_set)}, img_shape: {training_set[0][0].shape[:2]}, max_disp: {maxd}")
 
+
     # Training
     print("Training...")
     q, g = svm(n_iter, training_set, maxd)
 
     # Results
-    result_img = predict(validation_set[0][0], validation_set[0][1], validation_set[0][2], q, g, flag_l=False)
+    result_img = predict(validation_set[0], q, g, False)
     print(f"Done! Results written to disk as 'res.png'.")
     imsave('res.png',result_img, cmap='gray')
 
